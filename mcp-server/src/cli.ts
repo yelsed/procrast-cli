@@ -1,13 +1,19 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { existsSync, mkdirSync, chmodSync, createWriteStream } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { homedir } from "node:os";
+import { homedir, tmpdir, platform, arch } from "node:os";
+import { get as httpsGet } from "node:https";
+import { pipeline } from "node:stream/promises";
 
 const execFileAsync = promisify(execFile);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const GITHUB_REPO = "yelsed/procrast-cli";
+const BINARY_NAMES = ["procrast", "procrast-cli"];
+const CACHE_DIR = resolve(homedir(), ".cache", "procrast-cli", "bin");
 
 let cliBinaryPath: string | null = null;
 
@@ -20,11 +26,99 @@ async function which(cmd: string): Promise<string | null> {
   }
 }
 
+function getTargetTriple(): string | null {
+  const p = platform();
+  const a = arch();
+  if (p === "darwin" && a === "arm64") return "aarch64-apple-darwin";
+  if (p === "darwin" && a === "x64") return "x86_64-apple-darwin";
+  if (p === "linux" && a === "x64") return "x86_64-unknown-linux-gnu";
+  if (p === "win32" && a === "x64") return "x86_64-pc-windows-msvc";
+  return null;
+}
+
+function httpsGetJson(url: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    httpsGet(url, { headers: { "User-Agent": "procrast-mcp-server" } }, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return httpsGetJson(res.headers.location!).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      let data = "";
+      res.on("data", (chunk: string) => (data += chunk));
+      res.on("end", () => resolve(JSON.parse(data)));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+function httpsDownload(url: string, dest: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    httpsGet(url, { headers: { "User-Agent": "procrast-mcp-server" } }, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return httpsDownload(res.headers.location!, dest).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      const stream = createWriteStream(dest);
+      pipeline(res, stream).then(resolve, reject);
+    }).on("error", reject);
+  });
+}
+
+async function downloadPrebuiltBinary(): Promise<string | null> {
+  const target = getTargetTriple();
+  if (!target) return null;
+
+  const isWindows = platform() === "win32";
+  const binaryName = isWindows ? "procrast-cli.exe" : "procrast-cli";
+  const ext = isWindows ? ".zip" : ".tar.gz";
+  const assetName = `procrast-cli-${target}${ext}`;
+
+  console.error(`[procrast-mcp] Downloading CLI binary for ${target}...`);
+
+  try {
+    const release = (await httpsGetJson(
+      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+    )) as { assets: Array<{ name: string; browser_download_url: string }> };
+
+    const asset = release.assets.find((a) => a.name === assetName);
+    if (!asset) return null;
+
+    const tmpFile = join(tmpdir(), assetName);
+    await httpsDownload(asset.browser_download_url, tmpFile);
+
+    mkdirSync(CACHE_DIR, { recursive: true });
+    const destBinary = join(CACHE_DIR, binaryName);
+
+    if (isWindows) {
+      await execFileAsync("powershell", [
+        "-Command",
+        `Expand-Archive -Path '${tmpFile}' -DestinationPath '${CACHE_DIR}' -Force`,
+      ]);
+    } else {
+      await execFileAsync("tar", ["xzf", tmpFile, "-C", CACHE_DIR]);
+      chmodSync(destBinary, 0o755);
+    }
+
+    if (existsSync(destBinary)) {
+      console.error(`[procrast-mcp] Installed CLI to ${destBinary}`);
+      return destBinary;
+    }
+  } catch (e) {
+    console.error(`[procrast-mcp] Download failed: ${e}`);
+  }
+
+  return null;
+}
+
 async function findCliBinary(): Promise<string> {
   if (cliBinaryPath) return cliBinaryPath;
 
   // 1. Check PATH (try both names)
-  for (const name of ["procrast", "procrast-cli"]) {
+  for (const name of BINARY_NAMES) {
     const onPath = await which(name);
     if (onPath) {
       cliBinaryPath = onPath;
@@ -33,7 +127,7 @@ async function findCliBinary(): Promise<string> {
   }
 
   // 2. Check ~/.cargo/bin/
-  for (const name of ["procrast", "procrast-cli"]) {
+  for (const name of BINARY_NAMES) {
     const cargoBin = resolve(homedir(), ".cargo", "bin", name);
     if (existsSync(cargoBin)) {
       cliBinaryPath = cargoBin;
@@ -41,20 +135,35 @@ async function findCliBinary(): Promise<string> {
     }
   }
 
-  // 3. Auto-install via cargo
+  // 3. Check cache dir (from previous download)
+  for (const name of BINARY_NAMES) {
+    const cached = join(CACHE_DIR, name);
+    if (existsSync(cached)) {
+      cliBinaryPath = cached;
+      return cached;
+    }
+  }
+
+  // 4. Download prebuilt binary from GitHub Releases
+  const downloaded = await downloadPrebuiltBinary();
+  if (downloaded) {
+    cliBinaryPath = downloaded;
+    return downloaded;
+  }
+
+  // 5. Fall back to cargo install (for users with Rust)
   const cargo = await which("cargo");
   if (cargo) {
-    // Try local repo first (for development), then GitHub
     const cliRepoRoot = resolve(__dirname, "..", "..");
     const cargoToml = resolve(cliRepoRoot, "Cargo.toml");
     const installArgs = existsSync(cargoToml)
       ? ["install", "--path", cliRepoRoot]
-      : ["install", "--git", "https://github.com/yelsed/procrast-cli"];
+      : ["install", "--git", `https://github.com/${GITHUB_REPO}`];
 
-    console.error(`[procrast-mcp] CLI not found. Installing...`);
+    console.error(`[procrast-mcp] No prebuilt binary available. Building from source...`);
     try {
       await execFileAsync("cargo", installArgs, { timeout: 300_000 });
-      for (const name of ["procrast", "procrast-cli"]) {
+      for (const name of BINARY_NAMES) {
         const installed = resolve(homedir(), ".cargo", "bin", name);
         if (existsSync(installed)) {
           cliBinaryPath = installed;
@@ -62,12 +171,12 @@ async function findCliBinary(): Promise<string> {
         }
       }
     } catch {
-      // Installation failed, fall through to error
+      // Build failed, fall through to error
     }
   }
 
   throw new Error(
-    "procrast CLI not found. Install Rust (https://rustup.rs) then run: cargo install --git https://github.com/yelsed/procrast-cli"
+    "procrast CLI not found. Download it from https://github.com/yelsed/procrast-cli/releases or install Rust (https://rustup.rs) and run: cargo install --git https://github.com/yelsed/procrast-cli"
   );
 }
 
@@ -109,7 +218,7 @@ export function parseAuthError(result: CliResult): string | null {
     combined.includes("Not logged in") ||
     combined.includes("Session expired")
   ) {
-    return 'Not authenticated. Run `procrast login` in your terminal first.';
+    return 'Not authenticated. Run `procrast-cli login` in your terminal first.';
   }
   return null;
 }

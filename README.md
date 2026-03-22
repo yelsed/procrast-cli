@@ -4,10 +4,31 @@ A Rust CLI and TUI for browsing your [Procrast](https://github.com/yelsed/procra
 
 ## Prerequisites
 
-- [Rust](https://rustup.rs) (for building from source)
 - A Procrast account
 
 ## Install the CLI
+
+### Download prebuilt binary (recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/yelsed/procrast-cli/releases), extract it, and place the binary in your PATH:
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-cli-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv procrast-cli /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-cli-x86_64-apple-darwin.tar.gz | tar xz
+sudo mv procrast-cli /usr/local/bin/
+
+# Linux
+curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-cli-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv procrast-cli /usr/local/bin/
+```
+
+### Build from source
+
+Requires [Rust](https://rustup.rs):
 
 ```bash
 cargo install --git https://github.com/yelsed/procrast-cli
