@@ -106,7 +106,7 @@ claude plugin marketplace add github:yelsed/procrast-cli
 claude plugin install procrast
 ```
 
-Restart Claude Code after installing. The plugin will auto-install the CLI binary if it's not already on your system (requires Rust).
+Restart Claude Code after installing. The plugin will automatically download the CLI binary on first use — no Rust or build tools required.
 
 ### What it provides
 
