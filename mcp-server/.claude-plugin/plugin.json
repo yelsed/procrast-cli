@@ -1,0 +1,11 @@
+{
+  "name": "procrast",
+  "version": "0.1.0",
+  "description": "Browse, search, and read your Procrast ideas directly in Claude Code",
+  "author": {
+    "name": "Desley"
+  },
+  "repository": "https://github.com/yelsed/procrast-cli",
+  "license": "MIT",
+  "keywords": ["procrast", "ideas", "mcp"]
+}

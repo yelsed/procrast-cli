@@ -1,0 +1,14 @@
+{
+  "name": "procrast",
+  "description": "Procrast plugins for Claude Code",
+  "owner": {
+    "name": "Desley"
+  },
+  "plugins": [
+    {
+      "name": "procrast",
+      "source": "./mcp-server",
+      "description": "Browse, search, and read your Procrast ideas in Claude Code"
+    }
+  ]
+}

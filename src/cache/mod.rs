@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono::{NaiveDateTime, Utc};
 use rusqlite::Connection;
 
 use crate::api::models::Idea;
@@ -23,9 +24,13 @@ impl Cache {
                 uuid TEXT PRIMARY KEY,
                 data TEXT NOT NULL,
                 fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             );",
         )
-        .context("Failed to create cache table")?;
+        .context("Failed to create cache tables")?;
 
         Ok(Self { conn })
     }
@@ -69,16 +74,77 @@ impl Cache {
             .conn
             .prepare("SELECT data FROM ideas ORDER BY json_extract(data, '$.createdAt') DESC")?;
 
-        let ideas = stmt
-            .query_map([], |row| {
-                let json: String = row.get(0)?;
-                Ok(json)
-            })?
-            .filter_map(|r| r.ok())
-            .filter_map(|json| serde_json::from_str::<Idea>(&json).ok())
-            .collect();
+        let mut ideas = Vec::new();
+        let mut skipped = 0u32;
+        let rows = stmt.query_map([], |row| {
+            let json: String = row.get(0)?;
+            Ok(json)
+        })?;
+
+        for row in rows {
+            match row {
+                Ok(json) => match serde_json::from_str::<Idea>(&json) {
+                    Ok(idea) => ideas.push(idea),
+                    Err(_) => skipped += 1,
+                },
+                Err(_) => skipped += 1,
+            }
+        }
+
+        if skipped > 0 {
+            eprintln!("warning: skipped {} corrupted cache entries", skipped);
+        }
 
         Ok(ideas)
+    }
+
+    pub fn set_last_synced(&self) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES ('last_synced_at', datetime('now'))
+             ON CONFLICT(key) DO UPDATE SET value = datetime('now')",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_last_synced(&self) -> Option<String> {
+        // Try meta table first, fall back to most recent fetched_at from ideas
+        self.conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'last_synced_at'",
+                [],
+                |row| row.get(0),
+            )
+            .ok()
+            .or_else(|| {
+                self.conn
+                    .query_row(
+                        "SELECT MAX(fetched_at) FROM ideas",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .ok()
+                    .flatten()
+            })
+    }
+
+    pub fn last_synced_age_text(&self) -> Option<String> {
+        let timestamp_str: String = self.get_last_synced()?;
+        let synced_at = NaiveDateTime::parse_from_str(&timestamp_str, "%Y-%m-%d %H:%M:%S").ok()?;
+        let now = Utc::now().naive_utc();
+        let duration = now.signed_duration_since(synced_at);
+
+        let text = if duration.num_days() > 0 {
+            let days = duration.num_days();
+            if days == 1 { "1 day ago".to_string() } else { format!("{days} days ago") }
+        } else if duration.num_hours() > 0 {
+            let hours = duration.num_hours();
+            if hours == 1 { "1 hour ago".to_string() } else { format!("{hours} hours ago") }
+        } else {
+            let mins = duration.num_minutes();
+            if mins <= 1 { "just now".to_string() } else { format!("{mins} minutes ago") }
+        };
+        Some(text)
     }
 
     pub fn search_ideas(&self, query: &str) -> Result<Vec<Idea>> {
@@ -89,14 +155,26 @@ impl Cache {
              ORDER BY json_extract(data, '$.createdAt') DESC",
         )?;
 
-        let ideas = stmt
-            .query_map(rusqlite::params![pattern], |row| {
-                let json: String = row.get(0)?;
-                Ok(json)
-            })?
-            .filter_map(|r| r.ok())
-            .filter_map(|json| serde_json::from_str::<Idea>(&json).ok())
-            .collect();
+        let mut ideas = Vec::new();
+        let mut skipped = 0u32;
+        let rows = stmt.query_map(rusqlite::params![pattern], |row| {
+            let json: String = row.get(0)?;
+            Ok(json)
+        })?;
+
+        for row in rows {
+            match row {
+                Ok(json) => match serde_json::from_str::<Idea>(&json) {
+                    Ok(idea) => ideas.push(idea),
+                    Err(_) => skipped += 1,
+                },
+                Err(_) => skipped += 1,
+            }
+        }
+
+        if skipped > 0 {
+            eprintln!("warning: skipped {} corrupted cache entries", skipped);
+        }
 
         Ok(ideas)
     }

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use reqwest::{Client, StatusCode};
 
@@ -34,10 +36,39 @@ pub struct ApiClient {
     token: Option<String>,
 }
 
+impl std::fmt::Debug for ApiClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiClient")
+            .field("base_url", &self.base_url)
+            .field("token", &self.token.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
+}
+
+fn truncate_error_body(body: &str) -> &str {
+    let max = 200;
+    if body.len() <= max {
+        return body;
+    }
+    let mut end = max;
+    while end > 0 && !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    &body[..end]
+}
+
 impl ApiClient {
     pub fn new(base_url: String, token: Option<String>) -> Self {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .min_tls_version(reqwest::tls::Version::TLS_1_2)
+            .https_only(base_url.starts_with("https://"))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("failed to build HTTP client");
         Self {
-            client: Client::new(),
+            client,
             base_url,
             token,
         }
@@ -80,7 +111,7 @@ impl ApiClient {
             StatusCode::TOO_MANY_REQUESTS => Err(ApiError::RateLimited.into()),
             status => {
                 let body = resp.text().await.unwrap_or_default();
-                Err(ApiError::ServerError(format!("{}: {}", status, body)).into())
+                Err(ApiError::ServerError(format!("{}: {}", status, truncate_error_body(&body))).into())
             }
         }
     }
@@ -118,7 +149,7 @@ impl ApiClient {
             StatusCode::TOO_MANY_REQUESTS => Err(ApiError::RateLimited.into()),
             status => {
                 let body = resp.text().await.unwrap_or_default();
-                Err(ApiError::ServerError(format!("{}: {}", status, body)).into())
+                Err(ApiError::ServerError(format!("{}: {}", status, truncate_error_body(&body))).into())
             }
         }
     }
@@ -146,7 +177,7 @@ impl ApiClient {
             StatusCode::TOO_MANY_REQUESTS => Err(ApiError::RateLimited.into()),
             status => {
                 let body = resp.text().await.unwrap_or_default();
-                Err(ApiError::ServerError(format!("{}: {}", status, body)).into())
+                Err(ApiError::ServerError(format!("{}: {}", status, truncate_error_body(&body))).into())
             }
         }
     }
@@ -174,7 +205,7 @@ impl ApiClient {
             StatusCode::TOO_MANY_REQUESTS => Err(ApiError::RateLimited.into()),
             status => {
                 let body = resp.text().await.unwrap_or_default();
-                Err(ApiError::ServerError(format!("{}: {}", status, body)).into())
+                Err(ApiError::ServerError(format!("{}: {}", status, truncate_error_body(&body))).into())
             }
         }
     }

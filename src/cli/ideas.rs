@@ -31,14 +31,18 @@ fn handle_api_error(e: &anyhow::Error) -> bool {
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
+        let end = max.saturating_sub(3);
+        let truncated: String = chars[..end].iter().collect();
+        format!("{}...", truncated)
     }
 }
 
 fn short_uuid(uuid: &str) -> &str {
+    // UUIDs are ASCII hex, so byte slicing is safe here
     &uuid[..8.min(uuid.len())]
 }
 
@@ -57,10 +61,14 @@ fn ideas_table(ideas: &[Idea]) -> String {
                     .as_deref()
                     .unwrap_or("-")
                     .to_string(),
-                idea.refinement_status
-                    .as_deref()
-                    .unwrap_or("-")
-                    .to_string(),
+                if idea.completed_at.is_some() {
+                    "done".to_string()
+                } else {
+                    idea.refinement_status
+                        .as_deref()
+                        .unwrap_or("-")
+                        .to_string()
+                },
                 idea.created_at[..10.min(idea.created_at.len())].to_string(),
             ]
         })
@@ -76,7 +84,7 @@ fn ideas_table(ideas: &[Idea]) -> String {
     table.to_string()
 }
 
-pub async fn list(api_url: &str, limit: usize, json: bool) -> Result<()> {
+pub async fn list(api_url: &str, limit: usize, json: bool, hide_done: bool) -> Result<()> {
     let client = get_client(api_url)?;
     let cache = Cache::open().ok();
 
@@ -105,7 +113,11 @@ pub async fn list(api_url: &str, limit: usize, json: bool) -> Result<()> {
         }
     };
 
-    let ideas: Vec<_> = ideas.into_iter().take(limit).collect();
+    let ideas: Vec<_> = ideas
+        .into_iter()
+        .filter(|idea| !hide_done || idea.completed_at.is_none())
+        .take(limit)
+        .collect();
 
     if json {
         println!("{}", serde_json::to_string_pretty(&ideas)?);
@@ -212,18 +224,30 @@ pub async fn show(api_url: &str, uuid: &str, markdown: bool, json: bool) -> Resu
     }
 
     println!("\n{}", "─".repeat(40).dimmed());
+    let status = if idea.completed_at.is_some() {
+        "done"
+    } else {
+        idea.refinement_status.as_deref().unwrap_or("-")
+    };
     println!(
         "UUID: {} | Priority: {} | Status: {} | Created: {}",
         idea.uuid.dimmed(),
         idea.priority.as_deref().unwrap_or("-"),
-        idea.refinement_status.as_deref().unwrap_or("-"),
+        status,
         &idea.created_at[..10.min(idea.created_at.len())]
     );
+
+    if let Some(ref completed) = idea.completed_at {
+        println!(
+            "Completed: {}",
+            &completed[..completed.len().min(10)]
+        );
+    }
 
     Ok(())
 }
 
-pub async fn search(api_url: &str, query: &str, limit: usize) -> Result<()> {
+pub async fn search(api_url: &str, query: &str, limit: usize, json: bool) -> Result<()> {
     let client = get_client(api_url)?;
     let cache = Cache::open().ok();
 
@@ -248,6 +272,11 @@ pub async fn search(api_url: &str, query: &str, limit: usize) -> Result<()> {
     };
 
     let ideas: Vec<_> = ideas.into_iter().take(limit).collect();
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&ideas)?);
+        return Ok(());
+    }
 
     if offline {
         eprintln!(

@@ -4,7 +4,8 @@ use colored::Colorize;
 use crate::api::client::ApiClient;
 use crate::auth;
 
-pub async fn login(api_url: &str) -> Result<()> {
+/// Returns the token on success
+pub async fn login(api_url: &str) -> Result<String> {
     let email: String = dialoguer::Input::new()
         .with_prompt("Email")
         .interact_text()?;
@@ -14,6 +15,7 @@ pub async fn login(api_url: &str) -> Result<()> {
     let client = ApiClient::new(api_url.to_string(), None);
     let response = client.login(&email, &password).await?;
 
+    let token = response.token.clone();
     auth::store_token(&response.token)?;
 
     println!(
@@ -21,7 +23,7 @@ pub async fn login(api_url: &str) -> Result<()> {
         "✓".green().bold(),
         response.user.name.bold()
     );
-    Ok(())
+    Ok(token)
 }
 
 pub async fn logout(api_url: &str) -> Result<()> {

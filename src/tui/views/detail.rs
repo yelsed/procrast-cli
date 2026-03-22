@@ -135,6 +135,15 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled("  Created: ", Style::default().fg(Color::DarkGray)),
         Span::raw(&idea.created_at[..10.min(idea.created_at.len())]),
     ]));
+    if let Some(ref completed) = idea.completed_at {
+        lines.push(Line::from(vec![
+            Span::styled("Completed: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                &completed[..completed.len().min(10)],
+                Style::default().fg(Color::Green),
+            ),
+        ]));
+    }
 
     let content = Paragraph::new(Text::from(lines))
         .wrap(Wrap { trim: false })

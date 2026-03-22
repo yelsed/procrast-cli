@@ -45,6 +45,7 @@ pub struct Idea {
     pub created_at: String,
     pub updated_at: String,
     pub deleted_at: Option<String>,
+    pub completed_at: Option<String>,
 }
 
 /// Refinement data from GET /api/ideas/{uuid}/refinement

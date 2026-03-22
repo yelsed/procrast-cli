@@ -59,6 +59,11 @@ pub fn idea_to_markdown(idea: &Idea) -> String {
         "- Status: {}\n",
         idea.refinement_status.as_deref().unwrap_or("Not refined")
     ));
+    if let Some(ref completed) = idea.completed_at {
+        md.push_str(&format!("- **Completed:** {}\n", &completed[..completed.len().min(10)]));
+    } else {
+        md.push_str("- **Completed:** No\n");
+    }
     md.push_str(&format!("- UUID: {}\n", idea.uuid));
 
     md

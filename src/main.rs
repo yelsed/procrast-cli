@@ -35,6 +35,9 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+        /// Hide completed ideas
+        #[arg(long)]
+        hide_done: bool,
     },
     /// Show a single idea by UUID (or prefix)
     Show {
@@ -54,6 +57,9 @@ enum Commands {
         /// Maximum number of results
         #[arg(short, long, default_value_t = 20)]
         limit: usize,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
     /// Export an idea as a markdown file
     Export {
@@ -74,31 +80,47 @@ async fn main() -> Result<()> {
 
     match cli.command {
         None | Some(Commands::Tui) => {
-            // Launch TUI
-            let token = auth::get_token()?.ok_or_else(|| {
-                anyhow::anyhow!("Not logged in. Run `procrast login` first.")
-            })?;
+            // Login if needed, then launch TUI
+            let token = match auth::get_token()? {
+                Some(t) => t,
+                None => {
+                    println!("Not logged in. Please log in first.\n");
+                    cli::auth::login(&config.api_url).await?
+                }
+            };
+            let api_url = config.api_url;
             let client =
-                api::client::ApiClient::new(config.api_url, Some(token));
+                api::client::ApiClient::new(api_url.clone(), Some(token));
             let app = tui::app::App::new(client);
 
             let terminal = ratatui::init();
             let result = app.run(terminal).await;
             ratatui::restore();
-            result
+
+            match result {
+                Ok(true) => {
+                    // User pressed 'l' to re-login
+                    println!("Session expired. Logging in again...\n");
+                    cli::auth::login(&api_url).await?;
+                    println!("\nLogin successful! Run `procrast` to launch the TUI.");
+                    Ok(())
+                }
+                Ok(false) => Ok(()),
+                Err(e) => Err(e),
+            }
         }
-        Some(Commands::Login) => cli::auth::login(&config.api_url).await,
+        Some(Commands::Login) => cli::auth::login(&config.api_url).await.map(|_| ()),
         Some(Commands::Logout) => cli::auth::logout(&config.api_url).await,
-        Some(Commands::List { limit, json }) => {
-            cli::ideas::list(&config.api_url, limit, json).await
+        Some(Commands::List { limit, json, hide_done }) => {
+            cli::ideas::list(&config.api_url, limit, json, hide_done).await
         }
         Some(Commands::Show {
             uuid,
             markdown,
             json,
         }) => cli::ideas::show(&config.api_url, &uuid, markdown, json).await,
-        Some(Commands::Search { query, limit }) => {
-            cli::ideas::search(&config.api_url, &query, limit).await
+        Some(Commands::Search { query, limit, json }) => {
+            cli::ideas::search(&config.api_url, &query, limit, json).await
         }
         Some(Commands::Export { uuid, output }) => {
             cli::ideas::export(&config.api_url, &uuid, output).await

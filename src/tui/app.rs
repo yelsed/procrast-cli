@@ -1,9 +1,9 @@
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::DefaultTerminal;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use crate::api::client::ApiClient;
+use crate::api::client::{ApiClient, ApiError};
 use crate::api::models::Idea;
 use crate::cache::Cache;
 
@@ -25,8 +25,13 @@ pub struct App {
     pub search_results: Vec<Idea>,
     pub search_selected: usize,
     pub is_offline: bool,
+    pub is_unauthorized: bool,
+    pub cache_age_text: Option<String>,
     pub status_message: Option<String>,
     pub should_quit: bool,
+    pub quit_to_login: bool,
+    pending_refresh: bool,
+    last_retry: Option<Instant>,
     client: ApiClient,
     cache: Option<Cache>,
 }
@@ -42,8 +47,13 @@ impl App {
             search_results: Vec::new(),
             search_selected: 0,
             is_offline: false,
+            is_unauthorized: false,
+            cache_age_text: None,
             status_message: None,
             should_quit: false,
+            quit_to_login: false,
+            pending_refresh: false,
+            last_retry: None,
             client,
             cache: Cache::open().ok(),
         }
@@ -54,19 +64,36 @@ impl App {
             Ok(ideas) => {
                 if let Some(ref cache) = self.cache {
                     let _ = cache.upsert_ideas(&ideas);
+                    let _ = cache.set_last_synced();
                 }
                 self.ideas = ideas;
                 self.is_offline = false;
+                self.is_unauthorized = false;
+                self.cache_age_text = None;
                 self.status_message = Some(format!("{} ideas loaded", self.ideas.len()));
             }
-            Err(_) => {
+            Err(e) => {
+                let unauthorized = e.downcast_ref::<ApiError>()
+                    .is_some_and(|ae| matches!(ae, ApiError::Unauthorized));
+                self.is_unauthorized = unauthorized;
+
                 // Try cache
                 if let Some(ref cache) = self.cache {
                     if let Ok(cached) = cache.get_all_ideas() {
                         if !cached.is_empty() {
+                            let was_retry = !self.ideas.is_empty();
                             self.ideas = cached;
                             self.is_offline = true;
-                            self.status_message = Some("Offline — showing cached data".to_string());
+                            self.cache_age_text = cache.last_synced_age_text();
+                            self.status_message = if was_retry {
+                                if unauthorized {
+                                    Some("Re-login required — run 'procrast login'".to_string())
+                                } else {
+                                    Some("Could not connect — still offline".to_string())
+                                }
+                            } else {
+                                None
+                            };
                             return;
                         }
                     }
@@ -107,7 +134,7 @@ impl App {
         }
     }
 
-    pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+    pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<bool> {
         self.fetch_ideas().await;
 
         loop {
@@ -121,6 +148,12 @@ impl App {
 
             if self.should_quit {
                 break;
+            }
+
+            if self.pending_refresh {
+                self.pending_refresh = false;
+                self.fetch_ideas().await;
+                continue; // re-render immediately with results
             }
 
             if event::poll(Duration::from_millis(100))? {
@@ -147,7 +180,7 @@ impl App {
             }
         }
 
-        Ok(())
+        Ok(self.quit_to_login)
     }
 
     async fn handle_list_input(&mut self, key: KeyCode) {
@@ -174,8 +207,16 @@ impl App {
                 self.screen = Screen::Search;
             }
             KeyCode::Char('r') => {
-                self.status_message = Some("Refreshing...".to_string());
-                self.fetch_ideas().await;
+                let cooldown = Duration::from_secs(3);
+                if self.last_retry.is_none_or(|t| t.elapsed() >= cooldown) {
+                    self.last_retry = Some(Instant::now());
+                    self.status_message = Some("Retrying...".to_string());
+                    self.pending_refresh = true;
+                }
+            }
+            KeyCode::Char('l') if self.is_offline => {
+                self.quit_to_login = true;
+                self.should_quit = true;
             }
             _ => {}
         }

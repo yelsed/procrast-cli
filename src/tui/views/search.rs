@@ -57,11 +57,11 @@ fn render_results(frame: &mut Frame, area: Rect, app: &App) {
                 .summary_title
                 .as_deref()
                 .unwrap_or_else(|| {
-                    if idea.content.len() > 50 {
-                        &idea.content[..50]
-                    } else {
-                        &idea.content
+                    let mut end = 50.min(idea.content.len());
+                    while end > 0 && !idea.content.is_char_boundary(end) {
+                        end -= 1;
                     }
+                    &idea.content[..end]
                 });
 
             let uuid_short = &idea.uuid[..8.min(idea.uuid.len())];

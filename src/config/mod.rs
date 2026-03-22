@@ -10,7 +10,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            api_url: "http://localhost:8000/api".to_string(),
+            api_url: "https://procrastination-station-xwi7hrqi.on-forge.com/api".to_string(),
         }
     }
 }
@@ -19,7 +19,9 @@ impl Config {
     pub fn load() -> Result<Self> {
         // Env var takes highest priority
         if let Ok(url) = std::env::var("PROCRAST_API_URL") {
-            return Ok(Self { api_url: url });
+            let config = Self { api_url: url };
+            config.warn_if_insecure();
+            return Ok(config);
         }
 
         // Then config file
@@ -27,11 +29,21 @@ impl Config {
         if path.exists() {
             let content = std::fs::read_to_string(&path)?;
             let config: Config = toml::from_str(&content)?;
+            config.warn_if_insecure();
             return Ok(config);
         }
 
         // Default
         Ok(Self::default())
+    }
+
+    fn warn_if_insecure(&self) {
+        if !self.api_url.starts_with("https://") && !self.api_url.starts_with("http://localhost") {
+            eprintln!(
+                "WARNING: API URL does not use HTTPS ({}). Your auth token will be sent in cleartext.",
+                self.api_url
+            );
+        }
     }
 
     pub fn config_path() -> Result<PathBuf> {
