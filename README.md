@@ -100,7 +100,7 @@ The plugin lets Claude browse, search, and read your Procrast ideas directly in 
 
 ```bash
 # Add the marketplace (one-time)
-claude plugin marketplace add github:yelsed/procrast-cli
+claude plugin marketplace add yelsed/procrast-cli
 
 # Install the plugin
 claude plugin install procrast
