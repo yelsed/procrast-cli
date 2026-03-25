@@ -174,7 +174,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
     let help_text = if app.is_offline {
         " j/k:navigate  Enter:view  /:search  r:retry  l:login  q:quit "
     } else {
-        " j/k:navigate  Enter:view  /:search  r:refresh  q:quit "
+        " j/k:navigate  Enter:view  d:toggle done  /:search  r:refresh  q:quit "
     };
 
     let right_text = match (&app.status_message, app.is_offline) {

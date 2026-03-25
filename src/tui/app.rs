@@ -204,7 +204,7 @@ impl App {
                             self.handle_list_input(key.code).await;
                         }
                         Screen::Detail(_) => {
-                            self.handle_detail_input(key.code);
+                            self.handle_detail_input(key.code).await;
                         }
                         Screen::Search => {
                             self.handle_search_input(key.code).await;
@@ -248,6 +248,11 @@ impl App {
                     self.pending_refresh = true;
                 }
             }
+            KeyCode::Char('d') if !self.is_offline => {
+                if !self.ideas.is_empty() {
+                    self.pending_complete = Some(self.selected);
+                }
+            }
             KeyCode::Char('l') if self.is_offline => {
                 self.quit_to_login = true;
                 self.should_quit = true;
@@ -256,7 +261,7 @@ impl App {
         }
     }
 
-    fn handle_detail_input(&mut self, key: KeyCode) {
+    async fn handle_detail_input(&mut self, key: KeyCode) {
         match key {
             KeyCode::Esc | KeyCode::Char('q') => {
                 self.screen = Screen::List;
@@ -266,6 +271,11 @@ impl App {
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.scroll_offset = self.scroll_offset.saturating_sub(1);
+            }
+            KeyCode::Char('d') if !self.is_offline => {
+                if let Screen::Detail(idx) = self.screen {
+                    self.pending_complete = Some(idx);
+                }
             }
             KeyCode::Char('y') => {
                 if let Some(idea) = self.current_idea() {

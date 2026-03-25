@@ -158,7 +158,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
 
     let bar = Line::from(vec![
         Span::styled(
-            " Esc:back  j/k:scroll  y:copy markdown  q:quit ",
+            " Esc:back  j/k:scroll  d:toggle done  y:copy markdown  q:quit ",
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(msg, Style::default().fg(Color::Yellow)),
