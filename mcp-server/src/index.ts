@@ -5,7 +5,7 @@ import { registerResources } from "./resources.js";
 
 const server = new McpServer({
   name: "procrast",
-  version: "0.1.1",
+  version: "0.1.2",
 });
 
 registerTools(server);

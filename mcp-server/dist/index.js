@@ -28149,7 +28149,7 @@ async function listIdeas() {
 // src/index.ts
 var server = new McpServer({
   name: "procrast",
-  version: "0.1.1"
+  version: "0.1.2"
 });
 registerTools(server);
 registerResources(server);

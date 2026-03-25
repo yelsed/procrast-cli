@@ -214,6 +214,7 @@ pub async fn update(check_only: bool, json: bool) -> Result<()> {
     }
 
     download_and_replace(&release).await?;
-    println!("Updated to v{latest}.");
+    crate::auth::delete_token()?;
+    println!("Updated to v{latest}. Please run `procrast login` to re-authenticate.");
     Ok(())
 }
