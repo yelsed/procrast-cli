@@ -9,10 +9,7 @@
       "name": "procrast",
       "description": "Browse, search, and read your Procrast ideas in Claude Code",
       "version": "0.1.0",
-      "source": {
-        "type": "directory",
-        "path": "./mcp-server"
-      }
+      "source": "./mcp-server"
     }
   ]
 }
