@@ -54,3 +54,4 @@ After retrieving the full idea, **immediately enter plan mode** using `EnterPlan
 - If `check_auth` fails or `list_ideas` returns an error, tell the user to run `procrast login` in their terminal first
 - Keep the idea list scannable — show title, priority, and a short UUID prefix only
 - When entering plan mode, reference the idea's content directly so the plan is grounded in what the user captured
+- Call `check_update` alongside listing ideas. If an update is available, mention it briefly to the user (e.g. "A CLI update is available — run `procrast update` to get the latest features.")

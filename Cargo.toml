@@ -1,6 +1,6 @@
 [package]
 name = "procrast-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "CLI and TUI for Procrast idea capture"
 
@@ -23,3 +23,5 @@ colored = "3"
 dialoguer = "0.11"
 toml = "0.8"
 arboard = "3"
+flate2 = "1"
+tar = "0.4"

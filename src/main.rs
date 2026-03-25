@@ -74,6 +74,15 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Check for updates and update the CLI
+    Update {
+        /// Only check, don't install
+        #[arg(long)]
+        check: bool,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Launch the TUI
     Tui,
 }
@@ -133,5 +142,6 @@ async fn main() -> Result<()> {
         Some(Commands::Export { uuid, output }) => {
             cli::ideas::export(&config.api_url, &uuid, output).await
         }
+        Some(Commands::Update { check, json }) => cli::update::update(check, json).await,
     }
 }

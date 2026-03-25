@@ -177,6 +177,47 @@ export function registerTools(server: McpServer): void {
     return { content: [{ type: "text", text: result.stdout }] };
   });
 
+  server.registerTool("check_update", {
+    title: "Check for CLI Updates",
+    description:
+      "Check if a newer version of the Procrast CLI is available. Returns current and latest version info.",
+    annotations: { readOnlyHint: true },
+  }, async () => {
+    try {
+      const result = await execCli(["update", "--check", "--json"]);
+      if (result.exitCode !== 0) {
+        return {
+          content: [{ type: "text", text: `Update check failed: ${result.stderr.trim()}` }],
+          isError: true,
+        };
+      }
+
+      const info = JSON.parse(result.stdout) as {
+        current: string;
+        latest: string;
+        update_available: boolean;
+      };
+
+      if (info.update_available) {
+        return {
+          content: [{
+            type: "text",
+            text: `Procrast CLI update available: v${info.current} → v${info.latest}. Run \`procrast update\` in the terminal to install.`,
+          }],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: `Procrast CLI is up to date (v${info.current}).` }],
+      };
+    } catch (e) {
+      return {
+        content: [{ type: "text", text: `Update check failed: ${e}` }],
+        isError: true,
+      };
+    }
+  });
+
   server.registerTool("check_auth", {
     title: "Check Authentication",
     description:
