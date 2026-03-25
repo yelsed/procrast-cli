@@ -49,6 +49,33 @@ function ideaToText(idea: Idea): string {
   return lines.join("\n");
 }
 
+async function getUpdateNotice(): Promise<string | null> {
+  try {
+    const result = await execCli(["update", "--check", "--json"]);
+    if (result.exitCode !== 0) return null;
+    const info = JSON.parse(result.stdout) as {
+      current: string;
+      latest: string;
+      update_available: boolean;
+    };
+    if (info.update_available) {
+      return `\n\n---\n⬆️ Procrast CLI update available: v${info.current} → v${info.latest}. Run \`procrast update\` in the terminal to install.`;
+    }
+  } catch {
+    // Don't let update check failures break tool responses
+  }
+  return null;
+}
+
+function appendUpdateNotice(
+  content: Array<{ type: "text"; text: string }>,
+  notice: string | null,
+): Array<{ type: "text"; text: string }> {
+  if (!notice || content.length === 0) return content;
+  const last = content[content.length - 1];
+  return [...content.slice(0, -1), { type: "text" as const, text: last.text + notice }];
+}
+
 export function registerTools(server: McpServer): void {
   server.registerTool("list_ideas", {
     title: "List Ideas",
@@ -63,18 +90,18 @@ export function registerTools(server: McpServer): void {
     const args = ["list", "--json", "--limit", String(limit)];
     if (hide_done) args.push("--hide-done");
 
-    const result = await execCli(args);
+    const [result, updateNotice] = await Promise.all([execCli(args), getUpdateNotice()]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
 
     try {
       const ideas = parseJsonOutput<Idea[]>(result);
       if (ideas.length === 0) {
-        return { content: [{ type: "text", text: "No ideas found." }] };
+        return { content: appendUpdateNotice([{ type: "text", text: "No ideas found." }], updateNotice) };
       }
       const text = ideas.map(ideaSummaryLine).join("\n");
       return {
-        content: [{ type: "text", text: `${ideas.length} ideas:\n\n${text}` }],
+        content: appendUpdateNotice([{ type: "text", text: `${ideas.length} ideas:\n\n${text}` }], updateNotice),
       };
     } catch (e) {
       return {
@@ -92,13 +119,13 @@ export function registerTools(server: McpServer): void {
     },
     annotations: { readOnlyHint: true },
   }, async ({ uuid }) => {
-    const result = await execCli(["show", uuid, "--json"]);
+    const [result, updateNotice] = await Promise.all([execCli(["show", uuid, "--json"]), getUpdateNotice()]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
 
     try {
       const idea = parseJsonOutput<Idea>(result);
-      return { content: [{ type: "text", text: ideaToText(idea) }] };
+      return { content: appendUpdateNotice([{ type: "text", text: ideaToText(idea) }], updateNotice) };
     } catch (e) {
       const msg = String(e);
       if (msg.includes("Not found") || result.stderr.includes("Not found")) {
@@ -123,8 +150,9 @@ export function registerTools(server: McpServer): void {
     },
     annotations: { readOnlyHint: true },
   }, async ({ query, limit }) => {
-    const result = await execCli([
-      "search", query, "--json", "--limit", String(limit),
+    const [result, updateNotice] = await Promise.all([
+      execCli(["search", query, "--json", "--limit", String(limit)]),
+      getUpdateNotice(),
     ]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
@@ -133,17 +161,12 @@ export function registerTools(server: McpServer): void {
       const ideas = parseJsonOutput<Idea[]>(result);
       if (ideas.length === 0) {
         return {
-          content: [{ type: "text", text: `No ideas found for "${query}".` }],
+          content: appendUpdateNotice([{ type: "text", text: `No ideas found for "${query}".` }], updateNotice),
         };
       }
       const text = ideas.map(ideaSummaryLine).join("\n");
       return {
-        content: [
-          {
-            type: "text",
-            text: `${ideas.length} results for "${query}":\n\n${text}`,
-          },
-        ],
+        content: appendUpdateNotice([{ type: "text", text: `${ideas.length} results for "${query}":\n\n${text}` }], updateNotice),
       };
     } catch (e) {
       return {
@@ -161,7 +184,7 @@ export function registerTools(server: McpServer): void {
     },
     annotations: { readOnlyHint: true },
   }, async ({ uuid }) => {
-    const result = await execCli(["show", uuid, "--markdown"]);
+    const [result, updateNotice] = await Promise.all([execCli(["show", uuid, "--markdown"]), getUpdateNotice()]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
 
@@ -174,7 +197,7 @@ export function registerTools(server: McpServer): void {
       };
     }
 
-    return { content: [{ type: "text", text: result.stdout }] };
+    return { content: appendUpdateNotice([{ type: "text", text: result.stdout }], updateNotice) };
   });
 
   server.registerTool("check_update", {

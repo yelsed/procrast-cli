@@ -27930,6 +27930,26 @@ function ideaToText(idea) {
   if (idea.completedAt) lines.push(`- Completed: ${idea.completedAt}`);
   return lines.join("\n");
 }
+async function getUpdateNotice() {
+  try {
+    const result = await execCli(["update", "--check", "--json"]);
+    if (result.exitCode !== 0) return null;
+    const info = JSON.parse(result.stdout);
+    if (info.update_available) {
+      return `
+
+---
+\u2B06\uFE0F Procrast CLI update available: v${info.current} \u2192 v${info.latest}. Run \`procrast update\` in the terminal to install.`;
+    }
+  } catch {
+  }
+  return null;
+}
+function appendUpdateNotice(content, notice) {
+  if (!notice || content.length === 0) return content;
+  const last = content[content.length - 1];
+  return [...content.slice(0, -1), { type: "text", text: last.text + notice }];
+}
 function registerTools(server2) {
   server2.registerTool("list_ideas", {
     title: "List Ideas",
@@ -27942,19 +27962,19 @@ function registerTools(server2) {
   }, async ({ limit, hide_done }) => {
     const args = ["list", "--json", "--limit", String(limit)];
     if (hide_done) args.push("--hide-done");
-    const result = await execCli(args);
+    const [result, updateNotice] = await Promise.all([execCli(args), getUpdateNotice()]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
     try {
       const ideas = parseJsonOutput(result);
       if (ideas.length === 0) {
-        return { content: [{ type: "text", text: "No ideas found." }] };
+        return { content: appendUpdateNotice([{ type: "text", text: "No ideas found." }], updateNotice) };
       }
       const text = ideas.map(ideaSummaryLine).join("\n");
       return {
-        content: [{ type: "text", text: `${ideas.length} ideas:
+        content: appendUpdateNotice([{ type: "text", text: `${ideas.length} ideas:
 
-${text}` }]
+${text}` }], updateNotice)
       };
     } catch (e) {
       return {
@@ -27971,12 +27991,12 @@ ${text}` }]
     },
     annotations: { readOnlyHint: true }
   }, async ({ uuid: uuid3 }) => {
-    const result = await execCli(["show", uuid3, "--json"]);
+    const [result, updateNotice] = await Promise.all([execCli(["show", uuid3, "--json"]), getUpdateNotice()]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
     try {
       const idea = parseJsonOutput(result);
-      return { content: [{ type: "text", text: ideaToText(idea) }] };
+      return { content: appendUpdateNotice([{ type: "text", text: ideaToText(idea) }], updateNotice) };
     } catch (e) {
       const msg = String(e);
       if (msg.includes("Not found") || result.stderr.includes("Not found")) {
@@ -28000,12 +28020,9 @@ ${text}` }]
     },
     annotations: { readOnlyHint: true }
   }, async ({ query, limit }) => {
-    const result = await execCli([
-      "search",
-      query,
-      "--json",
-      "--limit",
-      String(limit)
+    const [result, updateNotice] = await Promise.all([
+      execCli(["search", query, "--json", "--limit", String(limit)]),
+      getUpdateNotice()
     ]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
@@ -28013,19 +28030,14 @@ ${text}` }]
       const ideas = parseJsonOutput(result);
       if (ideas.length === 0) {
         return {
-          content: [{ type: "text", text: `No ideas found for "${query}".` }]
+          content: appendUpdateNotice([{ type: "text", text: `No ideas found for "${query}".` }], updateNotice)
         };
       }
       const text = ideas.map(ideaSummaryLine).join("\n");
       return {
-        content: [
-          {
-            type: "text",
-            text: `${ideas.length} results for "${query}":
+        content: appendUpdateNotice([{ type: "text", text: `${ideas.length} results for "${query}":
 
-${text}`
-          }
-        ]
+${text}` }], updateNotice)
       };
     } catch (e) {
       return {
@@ -28042,7 +28054,7 @@ ${text}`
     },
     annotations: { readOnlyHint: true }
   }, async ({ uuid: uuid3 }) => {
-    const result = await execCli(["show", uuid3, "--markdown"]);
+    const [result, updateNotice] = await Promise.all([execCli(["show", uuid3, "--markdown"]), getUpdateNotice()]);
     const authErr = parseAuthError(result);
     if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
     if (result.exitCode !== 0) {
@@ -28053,7 +28065,7 @@ ${text}`
         isError: true
       };
     }
-    return { content: [{ type: "text", text: result.stdout }] };
+    return { content: appendUpdateNotice([{ type: "text", text: result.stdout }], updateNotice) };
   });
   server2.registerTool("check_update", {
     title: "Check for CLI Updates",
