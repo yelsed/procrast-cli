@@ -7,5 +7,6 @@
   },
   "repository": "https://github.com/yelsed/procrast-cli",
   "license": "MIT",
-  "keywords": ["procrast", "ideas", "mcp"]
+  "keywords": ["procrast", "ideas", "mcp"],
+  "skills": "./skills/"
 }

@@ -296,6 +296,45 @@ pub async fn search(api_url: &str, query: &str, limit: usize, json: bool) -> Res
     Ok(())
 }
 
+pub async fn done(api_url: &str, uuid: &str) -> Result<()> {
+    let client = get_client(api_url)?;
+
+    let idea = match client.toggle_complete(uuid).await {
+        Ok(idea) => idea,
+        Err(e) => {
+            if handle_api_error(&e) {
+                return Ok(());
+            }
+            return Err(e);
+        }
+    };
+
+    if let Some(ref cache) = Cache::open().ok() {
+        let _ = cache.upsert_ideas(&[idea.clone()]);
+    }
+
+    let title = idea
+        .summary_title
+        .as_deref()
+        .unwrap_or_else(|| &idea.content);
+
+    if idea.completed_at.is_some() {
+        println!(
+            "{} Marked as done: {}",
+            "✓".green().bold(),
+            truncate(title, 60)
+        );
+    } else {
+        println!(
+            "{} Unmarked: {}",
+            "☐".yellow().bold(),
+            truncate(title, 60)
+        );
+    }
+
+    Ok(())
+}
+
 pub async fn export(api_url: &str, uuid: &str, output: Option<PathBuf>) -> Result<()> {
     let client = get_client(api_url)?;
     let cache = Cache::open().ok();

@@ -31,6 +31,7 @@ pub struct App {
     pub should_quit: bool,
     pub quit_to_login: bool,
     pending_refresh: bool,
+    pending_complete: Option<usize>,
     last_retry: Option<Instant>,
     client: ApiClient,
     cache: Option<Cache>,
@@ -53,6 +54,7 @@ impl App {
             should_quit: false,
             quit_to_login: false,
             pending_refresh: false,
+            pending_complete: None,
             last_retry: None,
             client,
             cache: Cache::open().ok(),
@@ -154,6 +156,38 @@ impl App {
                 self.pending_refresh = false;
                 self.fetch_ideas().await;
                 continue; // re-render immediately with results
+            }
+
+            if let Some(idx) = self.pending_complete.take() {
+                if let Some(idea) = self.ideas.get(idx) {
+                    let uuid = idea.uuid.clone();
+                    match self.client.toggle_complete(&uuid).await {
+                        Ok(updated) => {
+                            let is_done = updated.completed_at.is_some();
+                            if let Some(ref cache) = self.cache {
+                                let _ = cache.upsert_ideas(&[updated.clone()]);
+                            }
+                            self.ideas[idx] = updated;
+                            self.status_message = Some(if is_done {
+                                "✓ Marked as done".to_string()
+                            } else {
+                                "☐ Unmarked".to_string()
+                            });
+                        }
+                        Err(e) => {
+                            if e.downcast_ref::<ApiError>()
+                                .is_some_and(|ae| matches!(ae, ApiError::Unauthorized))
+                            {
+                                self.status_message =
+                                    Some("Session expired — run 'procrast login'".to_string());
+                            } else {
+                                self.status_message =
+                                    Some(format!("Failed to toggle: {}", e));
+                            }
+                        }
+                    }
+                }
+                continue;
             }
 
             if event::poll(Duration::from_millis(100))? {

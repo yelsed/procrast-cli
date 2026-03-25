@@ -88,6 +88,7 @@ impl ApiClient {
             .json(&serde_json::json!({
                 "email": email,
                 "password": password,
+                "client_type": "cli",
             }))
             .send()
             .await
@@ -174,6 +175,37 @@ impl ApiClient {
             }
             StatusCode::UNAUTHORIZED => Err(ApiError::Unauthorized.into()),
             StatusCode::NOT_FOUND => Err(ApiError::NotFound.into()),
+            StatusCode::TOO_MANY_REQUESTS => Err(ApiError::RateLimited.into()),
+            status => {
+                let body = resp.text().await.unwrap_or_default();
+                Err(ApiError::ServerError(format!("{}: {}", status, truncate_error_body(&body))).into())
+            }
+        }
+    }
+
+    pub async fn toggle_complete(&self, uuid: &str) -> Result<Idea> {
+        let auth = self.auth_header()?;
+        let resp = self
+            .client
+            .post(format!("{}/ideas/{}/complete", self.base_url, uuid))
+            .header("Authorization", &auth)
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+
+        match resp.status() {
+            StatusCode::OK => {
+                let api_resp: ApiResponse<Idea> = resp
+                    .json()
+                    .await
+                    .context("Failed to parse complete response")?;
+                Ok(api_resp.data)
+            }
+            StatusCode::UNAUTHORIZED => Err(ApiError::Unauthorized.into()),
+            StatusCode::NOT_FOUND => Err(ApiError::NotFound.into()),
+            StatusCode::FORBIDDEN => Err(ApiError::ServerError(
+                "Token missing ideas:complete ability. Run `procrast logout && procrast login` to refresh.".to_string(),
+            ).into()),
             StatusCode::TOO_MANY_REQUESTS => Err(ApiError::RateLimited.into()),
             status => {
                 let body = resp.text().await.unwrap_or_default();
