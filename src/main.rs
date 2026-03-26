@@ -65,6 +65,9 @@ enum Commands {
     Done {
         /// Full UUID or prefix (first 6+ chars)
         uuid: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
     },
     /// Export an idea as a markdown file
     Export {
@@ -136,8 +139,8 @@ async fn main() -> Result<()> {
         Some(Commands::Search { query, limit, json }) => {
             cli::ideas::search(&config.api_url, &query, limit, json).await
         }
-        Some(Commands::Done { uuid }) => {
-            cli::ideas::done(&config.api_url, &uuid).await
+        Some(Commands::Done { uuid, json }) => {
+            cli::ideas::done(&config.api_url, &uuid, json).await
         }
         Some(Commands::Export { uuid, output }) => {
             cli::ideas::export(&config.api_url, &uuid, output).await

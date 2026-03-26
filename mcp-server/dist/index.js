@@ -27895,7 +27895,7 @@ function parseJsonOutput(result) {
 var uuidParam = external_exports.string().regex(/^[0-9a-f-]{6,36}$/i, "Must be a valid UUID or UUID prefix (6-36 hex characters)");
 function ideaSummaryLine(idea) {
   const title = idea.summaryTitle ?? idea.content.slice(0, 60);
-  const refinement = idea.refinementStatus ?? "not refined";
+  const refinement = idea.refinementStatus === "completed" ? "refined" : idea.refinementStatus ?? "not refined";
   const done = idea.completedAt ? ", done" : "";
   const priority = idea.priority ?? "-";
   return `[${idea.uuid.slice(0, 8)}] ${title} (priority: ${priority}, refinement: ${refinement}${done})`;
@@ -27925,7 +27925,7 @@ function ideaToText(idea) {
   lines.push("## Metadata");
   lines.push(`- UUID: ${idea.uuid}`);
   lines.push(`- Priority: ${idea.priority ?? "-"}`);
-  lines.push(`- Refinement: ${idea.refinementStatus ?? "not refined"}`);
+  lines.push(`- Refinement: ${idea.refinementStatus === "completed" ? "refined" : idea.refinementStatus ?? "not refined"}`);
   lines.push(`- Done: ${idea.completedAt ? `yes (${idea.completedAt})` : "no"}`);
   lines.push(`- Created: ${idea.createdAt}`);
   if (idea.dueDate) lines.push(`- Due: ${idea.dueDate}`);
@@ -28068,6 +28068,36 @@ ${text}` }], updateNotice)
     }
     return { content: appendUpdateNotice([{ type: "text", text: result.stdout }], updateNotice) };
   });
+  server2.registerTool("toggle_done", {
+    title: "Toggle Idea Completion",
+    description: "Toggle an idea's completion status (mark as done or undo). Returns the updated idea.",
+    inputSchema: {
+      uuid: uuidParam.describe("Full UUID or prefix (first 6+ characters)")
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false
+    }
+  }, async ({ uuid: uuid3 }) => {
+    const [result, updateNotice] = await Promise.all([
+      execCli(["done", uuid3, "--json"]),
+      getUpdateNotice()
+    ]);
+    const authErr = parseAuthError(result);
+    if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
+    try {
+      const idea = parseJsonOutput(result);
+      const status = idea.completedAt ? "marked as done" : "unmarked (no longer done)";
+      const text = `Idea ${status}.
+
+${ideaToText(idea)}`;
+      return { content: appendUpdateNotice([{ type: "text", text }], updateNotice) };
+    } catch (e) {
+      const msg = result.stderr.trim() || result.stdout.trim() || `Failed to toggle completion: ${e}`;
+      return { content: [{ type: "text", text: msg }], isError: true };
+    }
+  });
   server2.registerTool("check_update", {
     title: "Check for CLI Updates",
     description: "Check if a newer version of the Procrast CLI is available. Returns current and latest version info.",
@@ -28162,7 +28192,7 @@ async function listIdeas() {
 // src/index.ts
 var server = new McpServer({
   name: "procrast",
-  version: "0.1.3"
+  version: "0.1.7"
 });
 registerTools(server);
 registerResources(server);

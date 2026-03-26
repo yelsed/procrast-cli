@@ -201,6 +201,37 @@ export function registerTools(server: McpServer): void {
     return { content: appendUpdateNotice([{ type: "text", text: result.stdout }], updateNotice) };
   });
 
+  server.registerTool("toggle_done", {
+    title: "Toggle Idea Completion",
+    description:
+      "Toggle an idea's completion status (mark as done or undo). Returns the updated idea.",
+    inputSchema: {
+      uuid: uuidParam.describe("Full UUID or prefix (first 6+ characters)"),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+    },
+  }, async ({ uuid }) => {
+    const [result, updateNotice] = await Promise.all([
+      execCli(["done", uuid, "--json"]),
+      getUpdateNotice(),
+    ]);
+    const authErr = parseAuthError(result);
+    if (authErr) return { content: [{ type: "text", text: authErr }], isError: true };
+
+    try {
+      const idea = parseJsonOutput<Idea>(result);
+      const status = idea.completedAt ? "marked as done" : "unmarked (no longer done)";
+      const text = `Idea ${status}.\n\n${ideaToText(idea)}`;
+      return { content: appendUpdateNotice([{ type: "text", text }], updateNotice) };
+    } catch (e) {
+      const msg = result.stderr.trim() || result.stdout.trim() || `Failed to toggle completion: ${e}`;
+      return { content: [{ type: "text", text: msg }], isError: true };
+    }
+  });
+
   server.registerTool("check_update", {
     title: "Check for CLI Updates",
     description:

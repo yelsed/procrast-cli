@@ -301,7 +301,7 @@ pub async fn search(api_url: &str, query: &str, limit: usize, json: bool) -> Res
     Ok(())
 }
 
-pub async fn done(api_url: &str, uuid: &str) -> Result<()> {
+pub async fn done(api_url: &str, uuid: &str, json: bool) -> Result<()> {
     let client = get_client(api_url)?;
     let cache = Cache::open().ok();
 
@@ -326,6 +326,11 @@ pub async fn done(api_url: &str, uuid: &str) -> Result<()> {
 
     if let Some(ref c) = cache {
         let _ = c.upsert_ideas(&[idea.clone()]);
+    }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&idea)?);
+        return Ok(());
     }
 
     let title = idea
