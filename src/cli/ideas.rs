@@ -64,10 +64,11 @@ fn ideas_table(ideas: &[Idea]) -> String {
                 if idea.completed_at.is_some() {
                     "done".to_string()
                 } else {
-                    idea.refinement_status
-                        .as_deref()
-                        .unwrap_or("-")
-                        .to_string()
+                    match idea.refinement_status.as_deref() {
+                        Some("completed") => "refined".to_string(),
+                        Some(s) => s.to_string(),
+                        None => "-".to_string(),
+                    }
                 },
                 idea.created_at[..10.min(idea.created_at.len())].to_string(),
             ]
@@ -227,7 +228,11 @@ pub async fn show(api_url: &str, uuid: &str, markdown: bool, json: bool) -> Resu
     let status = if idea.completed_at.is_some() {
         "done"
     } else {
-        idea.refinement_status.as_deref().unwrap_or("-")
+        match idea.refinement_status.as_deref() {
+            Some("completed") => "refined",
+            Some(s) => s,
+            None => "-",
+        }
     };
     println!(
         "UUID: {} | Priority: {} | Status: {} | Created: {}",

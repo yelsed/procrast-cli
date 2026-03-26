@@ -7,7 +7,7 @@ const uuidParam = z.string().regex(/^[0-9a-f-]{6,36}$/i, "Must be a valid UUID o
 
 function ideaSummaryLine(idea: Idea): string {
   const title = idea.summaryTitle ?? idea.content.slice(0, 60);
-  const refinement = idea.refinementStatus ?? "not refined";
+  const refinement = idea.refinementStatus === "completed" ? "refined" : (idea.refinementStatus ?? "not refined");
   const done = idea.completedAt ? ", done" : "";
   const priority = idea.priority ?? "-";
   return `[${idea.uuid.slice(0, 8)}] ${title} (priority: ${priority}, refinement: ${refinement}${done})`;
@@ -42,7 +42,7 @@ function ideaToText(idea: Idea): string {
   lines.push("## Metadata");
   lines.push(`- UUID: ${idea.uuid}`);
   lines.push(`- Priority: ${idea.priority ?? "-"}`);
-  lines.push(`- Refinement: ${idea.refinementStatus ?? "not refined"}`);
+  lines.push(`- Refinement: ${idea.refinementStatus === "completed" ? "refined" : (idea.refinementStatus ?? "not refined")}`);
   lines.push(`- Done: ${idea.completedAt ? `yes (${idea.completedAt})` : "no"}`);
   lines.push(`- Created: ${idea.createdAt}`);
   if (idea.dueDate) lines.push(`- Due: ${idea.dueDate}`);

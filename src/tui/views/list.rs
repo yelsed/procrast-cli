@@ -132,7 +132,11 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
             let (status_text, status_style) = if idea.completed_at.is_some() {
                 ("done".to_string(), Style::default().fg(Color::Green))
             } else {
-                (idea.refinement_status.as_deref().unwrap_or("-").to_string(), Style::default())
+                (match idea.refinement_status.as_deref() {
+                    Some("completed") => "refined".to_string(),
+                    Some(s) => s.to_string(),
+                    None => "-".to_string(),
+                }, Style::default())
             };
             let created = &idea.created_at[..10.min(idea.created_at.len())];
 

@@ -57,7 +57,11 @@ pub fn idea_to_markdown(idea: &Idea) -> String {
     md.push_str(&format!("- Created: {}\n", idea.created_at));
     md.push_str(&format!(
         "- Status: {}\n",
-        idea.refinement_status.as_deref().unwrap_or("Not refined")
+        match idea.refinement_status.as_deref() {
+            Some("completed") => "Refined",
+            Some(s) => s,
+            None => "Not refined",
+        }
     ));
     if let Some(ref completed) = idea.completed_at {
         md.push_str(&format!("- **Completed:** {}\n", &completed[..completed.len().min(10)]));
