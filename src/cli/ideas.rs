@@ -298,8 +298,18 @@ pub async fn search(api_url: &str, query: &str, limit: usize, json: bool) -> Res
 
 pub async fn done(api_url: &str, uuid: &str) -> Result<()> {
     let client = get_client(api_url)?;
+    let cache = Cache::open().ok();
 
-    let idea = match client.toggle_complete(uuid).await {
+    // Resolve UUID prefix from cache if needed
+    let full_uuid = if let Some(ref c) = cache {
+        c.get_idea(uuid)?
+            .map(|idea| idea.uuid)
+            .unwrap_or_else(|| uuid.to_string())
+    } else {
+        uuid.to_string()
+    };
+
+    let idea = match client.toggle_complete(&full_uuid).await {
         Ok(idea) => idea,
         Err(e) => {
             if handle_api_error(&e) {
@@ -309,8 +319,8 @@ pub async fn done(api_url: &str, uuid: &str) -> Result<()> {
         }
     };
 
-    if let Some(ref cache) = Cache::open().ok() {
-        let _ = cache.upsert_ideas(&[idea.clone()]);
+    if let Some(ref c) = cache {
+        let _ = c.upsert_ideas(&[idea.clone()]);
     }
 
     let title = idea
