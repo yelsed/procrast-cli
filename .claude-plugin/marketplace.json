@@ -8,7 +8,7 @@
     {
       "name": "procrast",
       "description": "Browse, search, and read your Procrast ideas in Claude Code",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "source": "./mcp-server"
     }
   ]
