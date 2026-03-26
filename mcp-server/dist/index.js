@@ -27895,9 +27895,10 @@ function parseJsonOutput(result) {
 var uuidParam = external_exports.string().regex(/^[0-9a-f-]{6,36}$/i, "Must be a valid UUID or UUID prefix (6-36 hex characters)");
 function ideaSummaryLine(idea) {
   const title = idea.summaryTitle ?? idea.content.slice(0, 60);
-  const status = idea.completedAt ? "done" : idea.refinementStatus ?? "-";
+  const refinement = idea.refinementStatus ?? "not refined";
+  const done = idea.completedAt ? ", done" : "";
   const priority = idea.priority ?? "-";
-  return `[${idea.uuid.slice(0, 8)}] ${title} (priority: ${priority}, status: ${status})`;
+  return `[${idea.uuid.slice(0, 8)}] ${title} (priority: ${priority}, refinement: ${refinement}${done})`;
 }
 function ideaToText(idea) {
   const lines = [];
@@ -27924,10 +27925,10 @@ function ideaToText(idea) {
   lines.push("## Metadata");
   lines.push(`- UUID: ${idea.uuid}`);
   lines.push(`- Priority: ${idea.priority ?? "-"}`);
-  lines.push(`- Status: ${idea.completedAt ? "done" : idea.refinementStatus ?? "-"}`);
+  lines.push(`- Refinement: ${idea.refinementStatus ?? "not refined"}`);
+  lines.push(`- Done: ${idea.completedAt ? `yes (${idea.completedAt})` : "no"}`);
   lines.push(`- Created: ${idea.createdAt}`);
   if (idea.dueDate) lines.push(`- Due: ${idea.dueDate}`);
-  if (idea.completedAt) lines.push(`- Completed: ${idea.completedAt}`);
   return lines.join("\n");
 }
 async function getUpdateNotice() {
