@@ -76,3 +76,47 @@ jobs:
           files: |
             procrast-cli-*.tar.gz
             procrast-cli-*.zip
+
+  deploy:
+    name: Deploy binaries to backend
+    needs: release
+    if: always() && needs.release.result == 'success'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload binaries to backend
+        id: upload
+        env:
+          DEPLOY_SECRET: ${{ secrets.CLI_DEPLOY_SECRET }}
+          BACKEND_URL: https://procrastination-station-xwi7hrqi.on-forge.com
+        run: |
+          failed=0
+          for file in procrast-cli-*.tar.gz procrast-cli-*.zip; do
+            [ -f "$file" ] || continue
+            platform="${file#procrast-cli-}"
+            platform="${platform%.tar.gz}"
+            platform="${platform%.zip}"
+            echo "Uploading $file (platform: $platform, version: ${{ steps.version.outputs.version }})"
+            if ! curl --fail --retry 3 --max-time 60 \
+              -X POST "$BACKEND_URL/api/cli/releases" \
+              -H "Authorization: Bearer $DEPLOY_SECRET" \
+              -F "version=${{ steps.version.outputs.version }}" \
+              -F "platform=$platform" \
+              -F "binary=@$file"; then
+              echo "::warning::Failed to upload $file to backend"
+              failed=1
+            fi
+          done
+          if [ "$failed" -eq 1 ]; then
+            echo "::warning::Some binary uploads failed. The GitHub Release is fine — binaries just didn't reach the backend. Re-tag to retry."
+            exit 1
+          fi
