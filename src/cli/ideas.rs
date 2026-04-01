@@ -224,6 +224,24 @@ pub async fn show(api_url: &str, uuid: &str, markdown: bool, json: bool) -> Resu
         }
     }
 
+    if let Some(ref angles) = idea.creative_angles {
+        if !angles.is_empty() {
+            println!("\n{}", "Creative Angles".cyan().bold());
+            for (i, angle) in angles.iter().enumerate() {
+                println!("  {}. {}", i + 1, angle);
+            }
+        }
+    }
+
+    if let Some(ref questions) = idea.key_questions {
+        if !questions.is_empty() {
+            println!("\n{}", "Key Questions".cyan().bold());
+            for (i, q) in questions.iter().enumerate() {
+                println!("  {}. {}", i + 1, q);
+            }
+        }
+    }
+
     println!("\n{}", "─".repeat(40).dimmed());
     let status = if idea.completed_at.is_some() {
         "done"

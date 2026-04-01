@@ -116,6 +116,40 @@ fn render_content(frame: &mut Frame, area: Rect, app: &App) {
         }
     }
 
+    // Creative angles
+    if let Some(ref angles) = idea.creative_angles {
+        if !angles.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "Creative Angles",
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(""));
+            for (i, angle) in angles.iter().enumerate() {
+                lines.push(Line::from(format!("  {}. {}", i + 1, angle)));
+            }
+            lines.push(Line::from(""));
+        }
+    }
+
+    // Key questions
+    if let Some(ref questions) = idea.key_questions {
+        if !questions.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "Key Questions",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(""));
+            for (i, q) in questions.iter().enumerate() {
+                lines.push(Line::from(format!("  {}. {}", i + 1, q)));
+            }
+            lines.push(Line::from(""));
+        }
+    }
+
     // Metadata
     lines.push(Line::from(Span::styled(
         "─".repeat(40),

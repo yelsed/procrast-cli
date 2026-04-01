@@ -36,6 +36,8 @@ pub struct Idea {
     pub refinement_summary: Option<String>,
     pub summary_title: Option<String>,
     pub action_steps: Option<Vec<String>>,
+    pub creative_angles: Option<Vec<String>>,
+    pub key_questions: Option<Vec<String>>,
     pub refinement_status: Option<String>,
     pub refinement_conversation_id: Option<String>,
     pub audio_path: Option<String>,
@@ -58,5 +60,7 @@ pub struct Refinement {
     pub refinement_summary: Option<String>,
     pub summary_title: Option<String>,
     pub action_steps: Option<Vec<String>>,
+    pub creative_angles: Option<Vec<String>>,
+    pub key_questions: Option<Vec<String>>,
     pub refinement_conversation_id: Option<String>,
 }

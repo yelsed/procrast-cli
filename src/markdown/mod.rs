@@ -44,6 +44,28 @@ pub fn idea_to_markdown(idea: &Idea) -> String {
         }
     }
 
+    // Creative angles (if available)
+    if let Some(ref angles) = idea.creative_angles {
+        if !angles.is_empty() {
+            md.push_str("## Creative Angles\n\n");
+            for angle in angles {
+                md.push_str(&format!("- {}\n", angle));
+            }
+            md.push('\n');
+        }
+    }
+
+    // Key questions (if available)
+    if let Some(ref questions) = idea.key_questions {
+        if !questions.is_empty() {
+            md.push_str("## Key Questions\n\n");
+            for question in questions {
+                md.push_str(&format!("- {}\n", question));
+            }
+            md.push('\n');
+        }
+    }
+
     // Metadata
     md.push_str("## Metadata\n\n");
     md.push_str(&format!(
