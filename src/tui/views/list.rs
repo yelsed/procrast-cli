@@ -94,7 +94,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App) {
         )));
     } else {
         lines.push(Line::from(Span::styled(
-            format!("  {} ideas", app.ideas.len()),
+            format!("  {} ideas · Sort: {}", app.ideas.len(), app.sort_mode.label()),
             Style::default().fg(Color::DarkGray),
         )));
     }
@@ -176,9 +176,9 @@ fn render_table(frame: &mut Frame, area: Rect, app: &App) {
 
 fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
     let help_text = if app.is_offline {
-        " j/k:navigate  Enter:view  /:search  r:retry  l:login  q:quit "
+        " j/k:navigate  Enter:view  s:sort  /:search  r:retry  l:login  q:quit "
     } else {
-        " j/k:navigate  Enter:view  d:toggle done  /:search  r:refresh  q:quit "
+        " j/k:navigate  Enter:view  d:done  s:sort  /:search  r:refresh  q:quit "
     };
 
     let right_text = match (&app.status_message, app.is_offline) {

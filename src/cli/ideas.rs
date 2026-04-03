@@ -7,6 +7,7 @@ use crate::api::client::{ApiClient, ApiError};
 use crate::api::models::Idea;
 use crate::auth;
 use crate::cache::Cache;
+use crate::focus_score::{self, SortMode};
 use crate::markdown::idea_to_markdown;
 
 fn get_client(api_url: &str) -> Result<ApiClient> {
@@ -85,7 +86,7 @@ fn ideas_table(ideas: &[Idea]) -> String {
     table.to_string()
 }
 
-pub async fn list(api_url: &str, limit: usize, json: bool, hide_done: bool) -> Result<()> {
+pub async fn list(api_url: &str, limit: usize, json: bool, hide_done: bool, sort: SortMode) -> Result<()> {
     let client = get_client(api_url)?;
     let cache = Cache::open().ok();
 
@@ -114,11 +115,12 @@ pub async fn list(api_url: &str, limit: usize, json: bool, hide_done: bool) -> R
         }
     };
 
-    let ideas: Vec<_> = ideas
+    let mut ideas: Vec<_> = ideas
         .into_iter()
         .filter(|idea| !hide_done || idea.completed_at.is_none())
-        .take(limit)
         .collect();
+    focus_score::sort_ideas(&mut ideas, sort);
+    ideas.truncate(limit);
 
     if json {
         println!("{}", serde_json::to_string_pretty(&ideas)?);

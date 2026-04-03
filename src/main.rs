@@ -3,6 +3,7 @@ mod auth;
 mod cache;
 mod cli;
 mod config;
+mod focus_score;
 mod markdown;
 mod tui;
 
@@ -38,6 +39,9 @@ enum Commands {
         /// Hide completed ideas
         #[arg(long)]
         hide_done: bool,
+        /// Sort order: smart, priority, newest, oldest
+        #[arg(short, long, default_value_t = focus_score::SortMode::Smart, value_enum)]
+        sort: focus_score::SortMode,
     },
     /// Show a single idea by UUID (or prefix)
     Show {
@@ -128,8 +132,8 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Login) => cli::auth::login(&config.api_url).await.map(|_| ()),
         Some(Commands::Logout) => cli::auth::logout(&config.api_url).await,
-        Some(Commands::List { limit, json, hide_done }) => {
-            cli::ideas::list(&config.api_url, limit, json, hide_done).await
+        Some(Commands::List { limit, json, hide_done, sort }) => {
+            cli::ideas::list(&config.api_url, limit, json, hide_done, sort).await
         }
         Some(Commands::Show {
             uuid,

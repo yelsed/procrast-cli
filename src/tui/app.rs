@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use crate::api::client::{ApiClient, ApiError};
 use crate::api::models::Idea;
 use crate::cache::Cache;
+use crate::focus_score::{self, SortMode};
 
 use super::views::{detail, list, search};
 
@@ -28,6 +29,7 @@ pub struct App {
     pub is_unauthorized: bool,
     pub cache_age_text: Option<String>,
     pub status_message: Option<String>,
+    pub sort_mode: SortMode,
     pub should_quit: bool,
     pub quit_to_login: bool,
     pending_refresh: bool,
@@ -51,6 +53,7 @@ impl App {
             is_unauthorized: false,
             cache_age_text: None,
             status_message: None,
+            sort_mode: SortMode::Smart,
             should_quit: false,
             quit_to_login: false,
             pending_refresh: false,
@@ -59,6 +62,10 @@ impl App {
             client,
             cache: Cache::open().ok(),
         }
+    }
+
+    pub fn apply_sort(&mut self) {
+        focus_score::sort_ideas(&mut self.ideas, self.sort_mode);
     }
 
     pub async fn fetch_ideas(&mut self) {
@@ -72,6 +79,7 @@ impl App {
                 self.is_offline = false;
                 self.is_unauthorized = false;
                 self.cache_age_text = None;
+                self.apply_sort();
                 self.status_message = Some(format!("{} ideas loaded", self.ideas.len()));
             }
             Err(e) => {
@@ -87,6 +95,7 @@ impl App {
                             self.ideas = cached;
                             self.is_offline = true;
                             self.cache_age_text = cache.last_synced_age_text();
+                            self.apply_sort();
                             self.status_message = if was_retry {
                                 if unauthorized {
                                     Some("Re-login required — run 'procrast login'".to_string())
@@ -252,6 +261,12 @@ impl App {
                 if !self.ideas.is_empty() {
                     self.pending_complete = Some(self.selected);
                 }
+            }
+            KeyCode::Char('s') => {
+                self.sort_mode = self.sort_mode.next();
+                self.apply_sort();
+                self.selected = 0;
+                self.status_message = Some(format!("Sort: {}", self.sort_mode.label()));
             }
             KeyCode::Char('l') if self.is_offline => {
                 self.quit_to_login = true;
