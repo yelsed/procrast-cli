@@ -108,6 +108,7 @@ jobs:
             if ! curl --fail --retry 3 --max-time 60 -v \
               -X POST "$BACKEND_URL/api/cli/releases" \
               -H "Authorization: Bearer $DEPLOY_SECRET" \
+              -H "Accept: application/json" \
               -F "version=${{ steps.version.outputs.version }}" \
               -F "platform=$platform" \
               -F "binary=@$file"; then
