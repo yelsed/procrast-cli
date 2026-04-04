@@ -149,6 +149,6 @@ async fn main() -> Result<()> {
         Some(Commands::Export { uuid, output }) => {
             cli::ideas::export(&config.api_url, &uuid, output).await
         }
-        Some(Commands::Update { check, json }) => cli::update::update(check, json).await,
+        Some(Commands::Update { check, json }) => cli::update::update(&config.api_url, check, json).await,
     }
 }

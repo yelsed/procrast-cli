@@ -81,7 +81,6 @@ jobs:
     name: Deploy binaries to backend
     needs: release
     if: always() && needs.release.result == 'success'
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -106,7 +105,7 @@ jobs:
             platform="${platform%.tar.gz}"
             platform="${platform%.zip}"
             echo "Uploading $file (platform: $platform, version: ${{ steps.version.outputs.version }})"
-            if ! curl --fail --retry 3 --max-time 60 \
+            if ! curl --fail --retry 3 --max-time 60 -v \
               -X POST "$BACKEND_URL/api/cli/releases" \
               -H "Authorization: Bearer $DEPLOY_SECRET" \
               -F "version=${{ steps.version.outputs.version }}" \

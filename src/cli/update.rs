@@ -1,13 +1,14 @@
 use anyhow::{bail, Context, Result};
 use flate2::read::GzDecoder;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
 use tar::Archive;
 
-const GITHUB_REPO: &str = "yelsed/procrast-cli";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -20,15 +21,16 @@ const TARGET: &str = "x86_64-unknown-linux-gnu";
 const TARGET: &str = "x86_64-pc-windows-msvc";
 
 #[derive(Deserialize)]
-struct Release {
-    tag_name: String,
-    assets: Vec<Asset>,
+struct LatestResponse {
+    version: String,
+    platforms: HashMap<String, PlatformInfo>,
 }
 
 #[derive(Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
+struct PlatformInfo {
+    sha256: String,
+    #[allow(dead_code)]
+    size_bytes: u64,
 }
 
 #[derive(serde::Serialize)]
@@ -54,41 +56,60 @@ fn is_newer(latest: &str, current: &str) -> bool {
     l > c
 }
 
-async fn fetch_latest_release() -> Result<Release> {
-    let url = format!("https://api.github.com/repos/{GITHUB_REPO}/releases/latest");
+async fn fetch_latest_release(api_url: &str) -> Result<LatestResponse> {
+    let url = format!("{api_url}/cli/latest");
     let client = reqwest::Client::new();
-    let release: Release = client
+    let resp = client
         .get(&url)
         .header("User-Agent", "procrast-cli")
         .send()
         .await
-        .context("Failed to reach GitHub API")?
-        .json()
+        .context("Failed to reach update server")?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        bail!("Update server returned {status}: {body}");
+    }
+
+    resp.json()
         .await
-        .context("Failed to parse release info")?;
-    Ok(release)
+        .context("Failed to parse release info")
 }
 
-async fn download_and_replace(release: &Release) -> Result<()> {
-    let asset_name = format!("procrast-cli-{TARGET}.tar.gz");
-    let asset = release
-        .assets
-        .iter()
-        .find(|a| a.name == asset_name)
-        .context(format!("No release asset found for {TARGET}"))?;
+async fn download_and_replace(api_url: &str, version: &str, expected_sha256: &str) -> Result<()> {
+    let url = format!("{api_url}/cli/download/{version}/{TARGET}");
 
-    println!("Downloading {}...", asset.name);
+    println!("Downloading v{version} for {TARGET}...");
 
     let client = reqwest::Client::new();
-    let bytes = client
-        .get(&asset.browser_download_url)
+    let resp = client
+        .get(&url)
         .header("User-Agent", "procrast-cli")
         .send()
         .await
-        .context("Failed to download release")?
+        .context("Failed to download release")?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        bail!("Download failed ({status}): {body}");
+    }
+
+    let bytes = resp
         .bytes()
         .await
         .context("Failed to read download")?;
+
+    // Verify SHA256
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let actual_sha256 = format!("{:x}", hasher.finalize());
+    if actual_sha256 != expected_sha256 {
+        bail!(
+            "SHA256 mismatch: expected {expected_sha256}, got {actual_sha256}. Download may be corrupted."
+        );
+    }
 
     let current_exe = env::current_exe().context("Failed to determine current binary path")?;
     let _parent = current_exe.parent().context("No parent directory")?;
@@ -165,7 +186,7 @@ fn write_cached_version(version: &str) {
 }
 
 #[allow(dead_code)]
-pub async fn check_latest_version() -> Result<String> {
+pub async fn check_latest_version(api_url: &str) -> Result<String> {
     // Use cache if less than 1 hour old
     if let Some((version, modified)) = read_cached_version() {
         if let Ok(elapsed) = modified.elapsed() {
@@ -175,18 +196,14 @@ pub async fn check_latest_version() -> Result<String> {
         }
     }
 
-    let release = fetch_latest_release().await?;
-    let version = release.tag_name.strip_prefix('v').unwrap_or(&release.tag_name).to_string();
-    write_cached_version(&version);
-    Ok(version)
+    let release = fetch_latest_release(api_url).await?;
+    write_cached_version(&release.version);
+    Ok(release.version)
 }
 
-pub async fn update(check_only: bool, json: bool) -> Result<()> {
-    let release = fetch_latest_release().await?;
-    let latest = release
-        .tag_name
-        .strip_prefix('v')
-        .unwrap_or(&release.tag_name);
+pub async fn update(api_url: &str, check_only: bool, json: bool) -> Result<()> {
+    let release = fetch_latest_release(api_url).await?;
+    let latest = &release.version;
     let update_available = is_newer(latest, CURRENT_VERSION);
 
     write_cached_version(latest);
@@ -213,7 +230,12 @@ pub async fn update(check_only: bool, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    download_and_replace(&release).await?;
+    let platform_info = release
+        .platforms
+        .get(TARGET)
+        .context(format!("No release available for {TARGET}"))?;
+
+    download_and_replace(api_url, latest, &platform_info.sha256).await?;
     crate::auth::delete_token()?;
     println!("Updated to v{latest}. Please run `procrast login` to re-authenticate.");
     Ok(())
