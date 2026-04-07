@@ -61,7 +61,7 @@ async fn fetch_latest_release(api_url: &str) -> Result<LatestResponse> {
     let client = reqwest::Client::new();
     let resp = client
         .get(&url)
-        .header("User-Agent", "procrast-cli")
+        .header("User-Agent", "procrast")
         .send()
         .await
         .context("Failed to reach update server")?;
@@ -85,7 +85,7 @@ async fn download_and_replace(api_url: &str, version: &str, expected_sha256: &st
     let client = reqwest::Client::new();
     let resp = client
         .get(&url)
-        .header("User-Agent", "procrast-cli")
+        .header("User-Agent", "procrast")
         .send()
         .await
         .context("Failed to download release")?;

@@ -44,20 +44,20 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../procrast-cli-${{ matrix.target }}.tar.gz procrast-cli
+          tar czf ../../../procrast-${{ matrix.target }}.tar.gz procrast
           cd ../../..
 
       - name: Archive (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path target/${{ matrix.target }}/release/procrast-cli.exe -DestinationPath procrast-cli-${{ matrix.target }}.zip
+          Compress-Archive -Path target/${{ matrix.target }}/release/procrast.exe -DestinationPath procrast-${{ matrix.target }}.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: procrast-cli-${{ matrix.target }}
-          path: procrast-cli-${{ matrix.target }}.*
+          name: procrast-${{ matrix.target }}
+          path: procrast-${{ matrix.target }}.*
 
   release:
     name: Create Release
@@ -74,8 +74,8 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            procrast-cli-*.tar.gz
-            procrast-cli-*.zip
+            procrast-*.tar.gz
+            procrast-*.zip
 
   deploy:
     name: Deploy binaries to backend
@@ -99,9 +99,9 @@ jobs:
           BACKEND_URL: https://procrastination-station-xwi7hrqi.on-forge.com
         run: |
           failed=0
-          for file in procrast-cli-*.tar.gz procrast-cli-*.zip; do
+          for file in procrast-*.tar.gz procrast-*.zip; do
             [ -f "$file" ] || continue
-            platform="${file#procrast-cli-}"
+            platform="${file#procrast-}"
             platform="${platform%.tar.gz}"
             platform="${platform%.zip}"
             echo "Uploading $file (platform: $platform, version: ${{ steps.version.outputs.version }})"

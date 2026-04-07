@@ -10,6 +10,13 @@ use crate::focus_score::{self, SortMode};
 
 use super::views::{detail, list, search};
 
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Tab {
+    #[default]
+    Open,
+    Done,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Screen {
     List,
@@ -21,6 +28,8 @@ pub struct App {
     pub screen: Screen,
     pub ideas: Vec<Idea>,
     pub selected: usize,
+    pub selected_done: usize,
+    pub active_tab: Tab,
     pub scroll_offset: u16,
     pub search_query: String,
     pub search_results: Vec<Idea>,
@@ -45,6 +54,8 @@ impl App {
             screen: Screen::List,
             ideas: Vec::new(),
             selected: 0,
+            selected_done: 0,
+            active_tab: Tab::Open,
             scroll_offset: 0,
             search_query: String::new(),
             search_results: Vec::new(),
@@ -68,6 +79,44 @@ impl App {
         focus_score::sort_ideas(&mut self.ideas, self.sort_mode);
     }
 
+    pub fn filtered_indices(&self) -> Vec<usize> {
+        self.ideas
+            .iter()
+            .enumerate()
+            .filter(|(_, idea)| match self.active_tab {
+                Tab::Open => idea.completed_at.is_none(),
+                Tab::Done => idea.completed_at.is_some(),
+            })
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    pub fn tab_selected(&self) -> usize {
+        match self.active_tab {
+            Tab::Open => self.selected,
+            Tab::Done => self.selected_done,
+        }
+    }
+
+    pub fn tab_selected_mut(&mut self) -> &mut usize {
+        match self.active_tab {
+            Tab::Open => &mut self.selected,
+            Tab::Done => &mut self.selected_done,
+        }
+    }
+
+    pub fn selected_idea_index(&self) -> Option<usize> {
+        let indices = self.filtered_indices();
+        indices.get(self.tab_selected()).copied()
+    }
+
+    fn clamp_selections(&mut self) {
+        let open_count = self.ideas.iter().filter(|i| i.completed_at.is_none()).count();
+        let done_count = self.ideas.iter().filter(|i| i.completed_at.is_some()).count();
+        self.selected = if open_count > 0 { self.selected.min(open_count - 1) } else { 0 };
+        self.selected_done = if done_count > 0 { self.selected_done.min(done_count - 1) } else { 0 };
+    }
+
     pub async fn fetch_ideas(&mut self) {
         match self.client.list_ideas().await {
             Ok(ideas) => {
@@ -80,6 +129,8 @@ impl App {
                 self.is_unauthorized = false;
                 self.cache_age_text = None;
                 self.apply_sort();
+                self.selected = 0;
+                self.selected_done = 0;
                 self.status_message = Some(format!("{} ideas loaded", self.ideas.len()));
             }
             Err(e) => {
@@ -177,6 +228,7 @@ impl App {
                                 let _ = cache.upsert_ideas(&[updated.clone()]);
                             }
                             self.ideas[idx] = updated;
+                            self.clamp_selections();
                             self.status_message = Some(if is_done {
                                 "✓ Marked as done".to_string()
                             } else {
@@ -229,18 +281,36 @@ impl App {
     async fn handle_list_input(&mut self, key: KeyCode) {
         match key {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Tab => {
+                self.active_tab = match self.active_tab {
+                    Tab::Open => Tab::Done,
+                    Tab::Done => Tab::Open,
+                };
+                self.status_message = None;
+            }
+            KeyCode::Char('1') => {
+                self.active_tab = Tab::Open;
+                self.status_message = None;
+            }
+            KeyCode::Char('2') => {
+                self.active_tab = Tab::Done;
+                self.status_message = None;
+            }
             KeyCode::Char('j') | KeyCode::Down => {
-                if !self.ideas.is_empty() {
-                    self.selected = (self.selected + 1).min(self.ideas.len() - 1);
+                let count = self.filtered_indices().len();
+                if count > 0 {
+                    let sel = self.tab_selected_mut();
+                    *sel = (*sel + 1).min(count - 1);
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.selected = self.selected.saturating_sub(1);
+                let sel = self.tab_selected_mut();
+                *sel = sel.saturating_sub(1);
             }
             KeyCode::Enter => {
-                if !self.ideas.is_empty() {
+                if let Some(real_idx) = self.selected_idea_index() {
                     self.scroll_offset = 0;
-                    self.screen = Screen::Detail(self.selected);
+                    self.screen = Screen::Detail(real_idx);
                 }
             }
             KeyCode::Char('/') => {
@@ -258,14 +328,15 @@ impl App {
                 }
             }
             KeyCode::Char('d') if !self.is_offline => {
-                if !self.ideas.is_empty() {
-                    self.pending_complete = Some(self.selected);
+                if let Some(real_idx) = self.selected_idea_index() {
+                    self.pending_complete = Some(real_idx);
                 }
             }
             KeyCode::Char('s') => {
                 self.sort_mode = self.sort_mode.next();
                 self.apply_sort();
                 self.selected = 0;
+                self.selected_done = 0;
                 self.status_message = Some(format!("Sort: {}", self.sort_mode.label()));
             }
             KeyCode::Char('l') if self.is_offline => {

@@ -4,6 +4,10 @@ version = "0.1.10"
 edition = "2021"
 description = "CLI and TUI for Procrast idea capture"
 
+[[bin]]
+name = "procrast"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 ratatui = "0.29"

@@ -14,16 +14,16 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-cli-aarch64-apple-darwin.tar.gz | tar xz
-sudo mv procrast-cli /usr/local/bin/
+curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv procrast /usr/local/bin/
 
 # macOS (Intel)
-curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-cli-x86_64-apple-darwin.tar.gz | tar xz
-sudo mv procrast-cli /usr/local/bin/
+curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-x86_64-apple-darwin.tar.gz | tar xz
+sudo mv procrast /usr/local/bin/
 
 # Linux
-curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-cli-x86_64-unknown-linux-gnu.tar.gz | tar xz
-sudo mv procrast-cli /usr/local/bin/
+curl -L https://github.com/yelsed/procrast-cli/releases/latest/download/procrast-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv procrast /usr/local/bin/
 ```
 
 ### Build from source
@@ -37,7 +37,7 @@ cargo install --git https://github.com/yelsed/procrast-cli
 ## Authenticate
 
 ```bash
-procrast-cli login
+procrast login
 ```
 
 You'll be prompted for your email and password. The auth token is stored in your OS keyring (macOS Keychain, Linux secret-service, Windows Credential Manager).
@@ -46,25 +46,25 @@ You'll be prompted for your email and password. The auth token is stored in your
 
 ```bash
 # List your ideas
-procrast-cli list
-procrast-cli list --limit 10 --hide-done
-procrast-cli list --json
+procrast list
+procrast list --limit 10 --hide-done
+procrast list --json
 
 # Show a single idea (full UUID or prefix)
-procrast-cli show abc123
-procrast-cli show abc123 --markdown
-procrast-cli show abc123 --json
+procrast show abc123
+procrast show abc123 --markdown
+procrast show abc123 --json
 
 # Search ideas
-procrast-cli search "my query"
-procrast-cli search "my query" --json
+procrast search "my query"
+procrast search "my query" --json
 
 # Export an idea as a markdown file
-procrast-cli export abc123
-procrast-cli export abc123 --output my-idea.md
+procrast export abc123
+procrast export abc123 --output my-idea.md
 
 # Log out
-procrast-cli logout
+procrast logout
 ```
 
 ## TUI
@@ -72,9 +72,9 @@ procrast-cli logout
 Launch the interactive terminal UI:
 
 ```bash
-procrast-cli
+procrast
 # or
-procrast-cli tui
+procrast tui
 ```
 
 **Keybindings:**
