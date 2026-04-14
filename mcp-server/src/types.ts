@@ -7,6 +7,8 @@ export interface Idea {
   refinementSummary: string | null;
   summaryTitle: string | null;
   actionSteps: string[] | null;
+  creativeAngles: string[] | null;
+  keyQuestions: string[] | null;
   refinementStatus: string | null;
   refinementConversationId: string | null;
   audioPath: string | null;

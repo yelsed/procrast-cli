@@ -27890,6 +27890,16 @@ function ideaToText(idea) {
     lines.push("## Action Steps");
     idea.actionSteps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
   }
+  if (idea.creativeAngles?.length) {
+    lines.push("");
+    lines.push("## Creative Angles");
+    idea.creativeAngles.forEach((angle, i) => lines.push(`${i + 1}. ${angle}`));
+  }
+  if (idea.keyQuestions?.length) {
+    lines.push("");
+    lines.push("## Key Questions");
+    idea.keyQuestions.forEach((q, i) => lines.push(`${i + 1}. ${q}`));
+  }
   lines.push("");
   lines.push("## Metadata");
   lines.push(`- UUID: ${idea.uuid}`);
