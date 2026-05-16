@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use reqwest::{Client, StatusCode};
+use reqwest::{
+    header::{HeaderMap, HeaderValue, ACCEPT},
+    Client, StatusCode,
+};
 
 use super::models::*;
 
@@ -45,6 +48,17 @@ impl std::fmt::Debug for ApiClient {
     }
 }
 
+/// Pull the first per-field error string out of a Laravel-style `{errors: {field: [msg]}}` body.
+fn extract_first_field_error(body: &serde_json::Value) -> Option<String> {
+    let errors = body.get("errors")?.as_object()?;
+    for (_field, msgs) in errors {
+        if let Some(first) = msgs.as_array().and_then(|a| a.first()).and_then(|v| v.as_str()) {
+            return Some(first.to_string());
+        }
+    }
+    None
+}
+
 fn truncate_error_body(body: &str) -> &str {
     let max = 200;
     if body.len() <= max {
@@ -59,12 +73,16 @@ fn truncate_error_body(body: &str) -> &str {
 
 impl ApiClient {
     pub fn new(base_url: String, token: Option<String>) -> Self {
+        let mut default_headers = HeaderMap::new();
+        default_headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10))
             .min_tls_version(reqwest::tls::Version::TLS_1_2)
             .https_only(base_url.starts_with("https://"))
             .redirect(reqwest::redirect::Policy::none())
+            .default_headers(default_headers)
             .build()
             .expect("failed to build HTTP client");
         Self {
@@ -102,14 +120,19 @@ impl ApiClient {
                     .context("Failed to parse login response")?;
                 Ok(login)
             }
-            StatusCode::UNPROCESSABLE_ENTITY => {
+            StatusCode::UNPROCESSABLE_ENTITY | StatusCode::UNAUTHORIZED => {
                 let body: serde_json::Value = resp.json().await.unwrap_or_default();
-                let msg = body["message"]
-                    .as_str()
-                    .unwrap_or("Invalid credentials");
-                Err(ApiError::ValidationError(msg.to_string()).into())
+                let msg = extract_first_field_error(&body)
+                    .or_else(|| body["message"].as_str().map(str::to_string))
+                    .unwrap_or_else(|| "Invalid credentials".to_string());
+                Err(ApiError::ValidationError(msg).into())
             }
             StatusCode::TOO_MANY_REQUESTS => Err(ApiError::RateLimited.into()),
+            status if status.is_redirection() => Err(ApiError::ServerError(format!(
+                "Got HTTP {} redirect from {}/login — check PROCRAST_API_URL is correct (current: {})",
+                status, self.base_url, self.base_url
+            ))
+            .into()),
             status => {
                 let body = resp.text().await.unwrap_or_default();
                 Err(ApiError::ServerError(format!("{}: {}", status, truncate_error_body(&body))).into())
